@@ -43,7 +43,7 @@ def test_report_only():
     response = HttpResponse()
     mw.process_response(request, response)
     assert HEADER not in response
-    assert HEADER + '-Report-Only' in response
+    assert f'{HEADER}-Report-Only' in response
 
 
 def test_dont_replace():

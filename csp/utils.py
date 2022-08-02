@@ -70,10 +70,7 @@ def build_policy(config=None, update=None, replace=None, nonce=None):
     csp = {}
 
     for k in set(chain(config, replace)):
-        if k in replace:
-            v = replace[k]
-        else:
-            v = config[k]
+        v = replace[k] if k in replace else config[k]
         if v is not None:
             v = copy.copy(v)
             if not isinstance(v, (list, tuple)):
@@ -96,9 +93,7 @@ def build_policy(config=None, update=None, replace=None, nonce=None):
         # flag directives with an empty directive value
         if len(value) and value[0] is True:
             policy_parts[key] = ''
-        elif len(value) and value[0] is False:
-            pass
-        else:  # directives with many values like src lists
+        elif not len(value) or value[0] is not False:  # directives with many values like src lists
             policy_parts[key] = ' '.join(value)
 
         if key == 'child-src':
@@ -116,24 +111,17 @@ def build_policy(config=None, update=None, replace=None, nonce=None):
             policy_parts[section] = ("%s %s" %
                                      (policy, "'nonce-%s'" % nonce)).strip()
 
-    return '; '.join(['{} {}'.format(k, val).strip()
-                      for k, val in policy_parts.items()])
+    return '; '.join([f'{k} {val}'.strip() for k, val in policy_parts.items()])
 
 
 def _default_attr_mapper(attr_name, val):
-    if val:
-        return ' {}="{}"'.format(attr_name, val)
-    else:
-        return ''
+    return f' {attr_name}="{val}"' if val else ''
 
 
 def _bool_attr_mapper(attr_name, val):
     # Only return the bare word if the value is truthy
     # ie - defer=False should actually return an empty string
-    if val:
-        return ' {}'.format(attr_name)
-    else:
-        return ''
+    return f' {attr_name}' if val else ''
 
 
 def _async_attr_mapper(attr_name, val):
@@ -141,9 +129,9 @@ def _async_attr_mapper(attr_name, val):
     attributes. It can be set explicitly to `false` with no surrounding quotes
     according to the spec."""
     if val in [False, 'False']:
-        return ' {}=false'.format(attr_name)
+        return f' {attr_name}=false'
     elif val:
-        return ' {}'.format(attr_name)
+        return f' {attr_name}'
     else:
         return ''
 
@@ -166,20 +154,16 @@ ATTR_FORMAT_STR = ''.join(['{{{}}}'.format(a) for a in SCRIPT_ATTRS])
 def _unwrap_script(text):
     """Extract content defined between script tags"""
     matches = re.search(r'<script[\s|\S]*>([\s|\S]+?)</script>', text)
-    if matches and len(matches.groups()):
-        return matches.group(1).strip()
-
-    return text
+    return matches[1].strip() if matches and len(matches.groups()) else text
 
 
 def build_script_tag(content=None, **kwargs):
-    data = {}
-    # Iterate all possible script attrs instead of kwargs to make
-    # interpolation as easy as possible below
-    for attr_name, mapper in SCRIPT_ATTRS.items():
-        data[attr_name] = mapper(attr_name, kwargs.get(attr_name))
+    data = {
+        attr_name: mapper(attr_name, kwargs.get(attr_name))
+        for attr_name, mapper in SCRIPT_ATTRS.items()
+    }
 
     # Don't render block contents if the script has a 'src' attribute
     c = _unwrap_script(content) if content and not kwargs.get('src') else ''
     attrs = ATTR_FORMAT_STR.format(**data).rstrip()
-    return ('<script{}>{}</script>'.format(attrs, c).strip())
+    return f'<script{attrs}>{c}</script>'.strip()
